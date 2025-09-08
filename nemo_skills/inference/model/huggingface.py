@@ -281,7 +281,7 @@ class HuggingFaceModel(BaseModel):
         if self._vanilla_model is None:
             self._load_vanilla_model()
         
-        # Apply chat template
+        # Apply chat template (with thinking mode enabled by default for Qwen)
         prompt = self._vanilla_tokenizer.apply_chat_template(
             messages,
             tokenize=False,
