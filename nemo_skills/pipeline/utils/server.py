@@ -26,6 +26,7 @@ class SupportedServersSelfHosted(str, Enum):
     vllm = "vllm"
     sglang = "sglang"
     megatron = "megatron"
+    huggingface = "huggingface"
 
 
 class SupportedServers(str, Enum):
@@ -33,6 +34,7 @@ class SupportedServers(str, Enum):
     vllm = "vllm"
     sglang = "sglang"
     megatron = "megatron"
+    huggingface = "huggingface"
     openai = "openai"
     azureopenai = "azureopenai"
     gemini = "gemini"
@@ -121,8 +123,8 @@ def get_server_command(
 ):
     num_tasks = num_gpus
 
-    # check if the model path is mounted if not vllm, sglang, or trtllm;
-    # vllm, sglang, and trtllm can also pass model name as "model_path" so we need special processing
+    # check if the model path is mounted if not vllm;
+    # vllm can also pass model name as "model_path" so we need special processing
     if server_type not in ["vllm", "sglang", "trtllm"]:
         check_if_mounted(cluster_config, model_path)
 
@@ -199,6 +201,11 @@ def get_server_command(
             num_tasks = 1
         else:
             num_tasks = num_gpus
+    elif server_type == "huggingface":
+        # HuggingFace models don't need a server, they run directly
+        # Return a dummy command that just sleeps (the actual generation will happen in the main task)
+        server_start_cmd = "echo 'HuggingFace backend runs directly without server' && sleep infinity"
+        num_tasks = 1
     else:
         raise ValueError(f"Server type '{server_type}' not supported for model inference.")
 

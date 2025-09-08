@@ -62,6 +62,45 @@ def combine_cmds(cmds: list[str], single_node_mode: str) -> str:
     raise ValueError(f"Unknown single_node_mode: {single_node_mode}")
 
 
+def wrap_with_debugpy(cmd: str, enable_debug: bool = False, debug_port_start: int = 5678) -> str:
+    """
+    Wrap Python commands with debugpy for debugging subprocess execution.
+    
+    Args:
+        cmd: The command string to wrap
+        enable_debug: Whether to enable debugging
+        debug_port_start: Starting port for debugpy (will increment for multiple processes)
+    
+    Returns:
+        Modified command string with debugpy wrapper if debugging is enabled
+    """
+    if not enable_debug:
+        return cmd
+    
+    import re
+    
+    # Track port numbers for multiple Python processes
+    port = debug_port_start
+    
+    def replace_python_cmd(match):
+        nonlocal port
+        current_port = port
+        port += 1
+        
+        # Add debugpy with unique port for each Python command
+        return f'python -m debugpy --listen {current_port} --wait-for-client -m'
+    
+    # Replace all 'python -m' with debugpy wrapper
+    modified_cmd = re.sub(r'python -m', replace_python_cmd, cmd)
+    
+    # Log the debug ports being used
+    if modified_cmd != cmd:
+        print(f"[DEBUG] Command wrapped with debugpy. Ports used: {debug_port_start} to {port-1}")
+        print(f"[DEBUG] Use VS Code 'Python: Attach' configuration to connect to these ports")
+    
+    return modified_cmd
+
+
 def get_arg_from_module_or_dict(module, arg_name, default_value=None, override_dict=None):
     """If argument is in a dict, take from there. If not, take from the module."""
     if override_dict and arg_name in override_dict:

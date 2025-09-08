@@ -26,7 +26,7 @@ from nemo_skills.dataset.utils import ExtraDatasetType
 from nemo_skills.inference import GenerationType
 from nemo_skills.pipeline.app import app, typer_unpacker
 from nemo_skills.pipeline.generate import generate as _generate
-from nemo_skills.pipeline.utils.eval import combine_cmds, prepare_eval_commands
+from nemo_skills.pipeline.utils.eval import combine_cmds, prepare_eval_commands, wrap_with_debugpy
 from nemo_skills.utils import get_logger_name, setup_logging
 
 LOG = logging.getLogger(get_logger_name(__file__))
@@ -91,18 +91,6 @@ def eval(
         None,
         help="Path to the entrypoint of the judge server. "
         "If not specified, will use the default entrypoint for the server type.",
-    ),
-    judge_generation_type: GenerationType | None = typer.Option(
-        None, help="Type of generation to perform for the judge (if applicable)"
-    ),
-    judge_generation_module: str = typer.Option(
-        None,
-        help="Path to the generation module to use for the judge (if applicable). "
-        "If not specified, will use the registered generation module for the "
-        "generation type.",
-    ),
-    server_container: str = typer.Option(
-        None, help="Override container image for the hosted server (if server_gpus is set)"
     ),
     extra_judge_args: str = typer.Option(
         "", help="Additional arguments for judge (passed to generate script, so should start with ++)"
@@ -191,6 +179,14 @@ def eval(
         False,
         help="If True, skip checking that HF_HOME env var is defined in the cluster config.",
     ),
+    debug_subprocess: bool = typer.Option(
+        False,
+        help="Enable debugpy for subprocess debugging. Will pause execution waiting for debugger attachment.",
+    ),
+    debug_port_start: int = typer.Option(
+        5678,
+        help="Starting port for debugpy when debug_subprocess is True. Will increment for multiple processes.",
+    ),
     installation_command: str | None = typer.Option(
         None,
         help="An installation command to run before main job. Only affects main task (not server or sandbox). "
@@ -243,9 +239,8 @@ def eval(
         "server_nodes": server_nodes,
         "server_args": server_args,
         "server_entrypoint": server_entrypoint,
-        "server_container": server_container,
     }
-    cli_judge_pipeline_args = {
+    judge_server_parameters = {
         "model": judge_model,
         "server_type": judge_server_type,
         "server_address": judge_server_address,
@@ -253,10 +248,8 @@ def eval(
         "server_nodes": judge_server_nodes,
         "server_args": judge_server_args,
         "server_entrypoint": judge_server_entrypoint,
-        "generation_type": judge_generation_type,
-        "generation_module": judge_generation_module,
     }
-    eval_requires_judge = any(param_value for param_value in cli_judge_pipeline_args.values())
+    eval_requires_judge = any(param_value for param_value in judge_server_parameters.values())
 
     # Prepare cluster config and mount paths
     cluster_config = pipeline_utils.get_cluster_config(cluster, config_dir)
@@ -329,7 +322,13 @@ def eval(
                 has_tasks = True
                 new_task = pipeline_utils.add_task(
                     exp,
-                    cmd=pipeline_utils.wrap_python_path(cmd=combine_cmds(cmds, single_node_mode)),
+                    cmd=pipeline_utils.wrap_python_path(
+                        cmd=wrap_with_debugpy(
+                            combine_cmds(cmds, single_node_mode),
+                            enable_debug=debug_subprocess,
+                            debug_port_start=debug_port_start
+                        )
+                    ),
                     task_name=f"{expname}-{'-'.join(job_benchmarks)}",
                     log_dir=log_dir,
                     container=cluster_config["containers"]["nemo-skills"],
@@ -389,7 +388,7 @@ def eval(
             if judge_server_gpus is not None:
                 judge_pipeline_args["server_address"] = None
 
-            for judge_server_param, judge_server_value in cli_judge_pipeline_args.items():
+            for judge_server_param, judge_server_value in judge_server_parameters.items():
                 if judge_server_value is not None:
                     judge_pipeline_args[judge_server_param] = judge_server_value
             # TODO: should we support parsing a string?
