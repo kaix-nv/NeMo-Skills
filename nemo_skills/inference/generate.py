@@ -148,6 +148,7 @@ class GenerateSolutionsConfig:
         self._post_init_validate_data()
         self._post_init_validate_server()
         self._post_init_validate_params()
+        self._post_init_validate_prompt_tokens()
 
     def _post_init_validate_data(self):
         if isinstance(self.total_code_executions_in_prompt, ListConfig):
@@ -183,6 +184,28 @@ class GenerateSolutionsConfig:
         for param, default_value in self._get_disallowed_params():
             if getattr(self, param) != default_value:
                 raise ValueError(f"{param} must be {default_value}")
+
+    def _post_init_validate_prompt_tokens(self):
+        """Validate and auto-correct special tokens in prompt configuration."""
+        # Special tokens that should be appended to user messages, not used as system messages
+        special_tokens = ['/think', '/no_think']
+        
+        # Check if system_message contains a special token
+        if self.system_message and self.system_message.strip() in special_tokens:
+            # Auto-correct: move to prompt_suffix
+            token = self.system_message.strip()
+            if not self.prompt_suffix:
+                self.prompt_suffix = ' ' + token
+            elif token not in self.prompt_suffix:
+                self.prompt_suffix = self.prompt_suffix + ' ' + token
+            
+            # Clear the system_message to prevent it from being used incorrectly
+            LOG.warning(
+                f"Detected special token '{token}' as system_message. "
+                f"Auto-correcting by moving to prompt_suffix: '{self.prompt_suffix}'. "
+                f"Special tokens should be appended to user messages, not used as system instructions."
+            )
+            self.system_message = None
 
     def _get_disallowed_params(self):
         """Returns a list of parameters with their default values to check that they are not changed from the defaults"""
@@ -400,10 +423,17 @@ class GenerationTask:
             if self.cfg.prompt_suffix:
                 data_point["messages"][-1]["content"] += self.cfg.prompt_suffix
             if self.cfg.system_message:
-                if data_point["messages"][0]["role"] != "system":
-                    data_point["messages"].insert(0, {"role": "system", "content": self.cfg.system_message})
+                # Check if system_message is a special token that should be appended to user message
+                special_tokens = ['/think', '/no_think']
+                if self.cfg.system_message.strip() in special_tokens:
+                    # Append to the last user message instead of using as system message
+                    data_point["messages"][-1]["content"] += ' ' + self.cfg.system_message.strip()
                 else:
-                    data_point["messages"][0]["content"] = self.cfg.system_message
+                    # Normal system message handling
+                    if data_point["messages"][0]["role"] != "system":
+                        data_point["messages"].insert(0, {"role": "system", "content": self.cfg.system_message})
+                    else:
+                        data_point["messages"][0]["content"] = self.cfg.system_message
             return data_point["messages"]
 
         total_code_executions_in_prompt = self.cfg.total_code_executions_in_prompt

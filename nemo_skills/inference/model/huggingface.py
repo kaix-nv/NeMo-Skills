@@ -51,6 +51,7 @@ class HuggingFaceModel(BaseModel):
         max_retries: int = 3,
         # Plugin-specific parameters
         threshold: Optional[float] = None,
+        softmax_thresh: Optional[float] = None,
         stride: int = 16,
         chunk_size: int = 2048,
         skip_first_n: int = 0,
@@ -101,6 +102,7 @@ class HuggingFaceModel(BaseModel):
                 attention_method=attention_method,
                 tokenizer=tokenizer,
                 threshold=threshold,
+                softmax_thresh=softmax_thresh,
                 stride=stride,
                 chunk_size=chunk_size,
                 skip_first_n=skip_first_n,
@@ -145,17 +147,10 @@ class HuggingFaceModel(BaseModel):
         **kwargs
     ):
         """Initialize model with attention plugin system."""
-        try:
-            from evaluation.scripts.common.model_utils import (
-                create_model_wrapper,
-                ensure_model_loaded,
-            )
-            # from evaluation.attention_plugins import create_plugin
-        except ImportError as e:
-            LOG.error(f"Failed to import plugin system: {e}")
-            raise ImportError(
-                "Plugin system not available. Ensure evaluation plugins are installed."
-            ) from e
+        from evaluation.scripts.common.model_utils import (
+            create_model_wrapper,
+            ensure_model_loaded,
+        )
         
         # Create args namespace matching call_api.py pattern
         args = Namespace(
@@ -165,6 +160,7 @@ class HuggingFaceModel(BaseModel):
             tokenizer=tokenizer or model,
             # Add all plugin-specific parameters
             threshold=kwargs.get('threshold'),
+            softmax_thresh=kwargs.get('softmax_thresh'),
             stride=kwargs.get('stride', 16),
             chunk_size=kwargs.get('chunk_size', 2048),
             skip_first_n=kwargs.get('skip_first_n', 0),
