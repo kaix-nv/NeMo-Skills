@@ -465,3 +465,19 @@ class HuggingFaceModel(BaseModel):
         
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+    
+    def get_statistics(self) -> Optional[Dict]:
+        """
+        Get statistics from the attention plugin.
+        
+        Returns:
+            Dictionary containing plugin statistics including sparsity ratios,
+            or None if no plugin is active or no statistics available.
+        """
+        if self.plugin is None:
+            return None
+        
+        if hasattr(self.plugin, 'get_statistics'):
+            return self.plugin.get_statistics()
+        
+        return None

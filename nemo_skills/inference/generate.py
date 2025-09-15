@@ -623,7 +623,51 @@ class GenerationTask:
         self.wait_for_server()
         asyncio.run(self.async_loop(data))
 
+        # Save plugin statistics after generation completes
+        self.save_plugin_statistics()
+
         self.postprocess()
+    
+    def save_plugin_statistics(self):
+        """Save plugin statistics if available from the model."""
+        # Check if model has plugin with statistics
+        if not hasattr(self.llm, 'get_statistics'):
+            return
+        
+        plugin_stats = self.llm.get_statistics()
+        if not plugin_stats:
+            return
+        
+        # Create statistics filename based on output file
+        output_path = Path(self.cfg.output_file)
+        stats_filename = output_path.stem + "_plugin_statistics.json"
+        stats_path = output_path.parent / stats_filename
+        
+        # Write statistics to file
+        with open(stats_path, "w", encoding="utf-8") as stats_file:
+            json.dump(plugin_stats, stats_file, indent=2)
+        
+        LOG.info(f"\n✓ Plugin statistics saved to: {stats_path}")
+        
+        # Print summary of sparsity ratios if available
+        if "overall_average_sparse_ratio" in plugin_stats:
+            LOG.info(
+                f"  - Overall sparse ratio: {plugin_stats['overall_average_sparse_ratio']:.4f}"
+            )
+        if (
+            "prefill_average_sparse_ratio" in plugin_stats
+            and plugin_stats["prefill_average_sparse_ratio"] is not None
+        ):
+            LOG.info(
+                f"  - Prefill sparse ratio: {plugin_stats['prefill_average_sparse_ratio']:.4f}"
+            )
+        if (
+            "decode_average_sparse_ratio" in plugin_stats
+            and plugin_stats["decode_average_sparse_ratio"] is not None
+        ):
+            LOG.info(
+                f"  - Decode sparse ratio: {plugin_stats['decode_average_sparse_ratio']:.4f}"
+            )
 
 
 GENERATION_TASK_CLASS = GenerationTask
