@@ -150,7 +150,7 @@ class HuggingFaceModel(BaseModel):
                 create_model_wrapper,
                 ensure_model_loaded,
             )
-            from evaluation.attention_plugins import create_plugin
+            # from evaluation.attention_plugins import create_plugin
         except ImportError as e:
             LOG.error(f"Failed to import plugin system: {e}")
             raise ImportError(
@@ -186,11 +186,10 @@ class HuggingFaceModel(BaseModel):
         
         # Extract generation parameters
         max_new_tokens = kwargs.get('tokens_to_generate', 512)
-        do_sample = kwargs.get('temperature', 0.0) > 0
         
         # Create model wrapper using plugin system
         LOG.info(f"Creating HuggingFace model with plugin: {args.attention_method}")
-        self.plugin = create_model_wrapper(args, max_new_tokens, do_sample)
+        self.plugin = create_model_wrapper(args, max_new_tokens, None)
         
         # Ensure model is loaded (for lazy-loading plugins)
         ensure_model_loaded(self.plugin)
@@ -355,8 +354,11 @@ class HuggingFaceModel(BaseModel):
             if temperature > 0:
                 plugin_kwargs['temperature'] = temperature
                 plugin_kwargs['top_p'] = top_p
+                plugin_kwargs['do_sample'] = True
                 if top_k > 0:
                     plugin_kwargs['top_k'] = top_k
+            else:
+                plugin_kwargs['do_sample'] = False
             if stop_phrases:
                 plugin_kwargs['stop'] = stop_phrases
             
