@@ -40,8 +40,15 @@ class LiveCodeBenchMetrics(BaseMetrics):
         return {"graded_list": [False]}
 
     def update(self, predictions):
-        super().update(predictions)
-        self._compute_pass_at_k(predictions=predictions)
+        # Filter out predictions without graded_list (unevaluated samples)
+        filtered_predictions = [p for p in predictions if "graded_list" in p]
+        
+        # Skip processing if no valid predictions remain
+        if not filtered_predictions:
+            return
+        
+        super().update(filtered_predictions)
+        self._compute_pass_at_k(predictions=filtered_predictions)
 
 
 class SweBenchMetrics(BaseMetrics):

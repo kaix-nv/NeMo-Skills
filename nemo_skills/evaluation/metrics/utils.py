@@ -23,6 +23,12 @@ LOG = logging.getLogger(get_logger_name(__file__))
 def read_predictions(predictions, line_idx, file_handles):
     data = []
     for file_idx, prediction in enumerate(predictions):
+        # Skip None predictions (from zip_longest when files have different lengths)
+        if prediction is None:
+            continue
+        # Skip empty lines
+        if isinstance(prediction, str) and prediction.strip() == "":
+            continue
         try:
             prediction_dict = json.loads(prediction)
         except Exception as e:

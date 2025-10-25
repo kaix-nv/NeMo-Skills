@@ -120,6 +120,10 @@ def eval(
     time_min: str = typer.Option(None, help="If specified, will use as a time-min slurm parameter"),
     mount_paths: str = typer.Option(None, help="Comma separated list of paths to mount on the remote machine"),
     extra_eval_args: str = typer.Option("", help="Additional arguments for evaluation"),
+    max_samples: int = typer.Option(
+        -1,
+        help="Limit generation to first N samples. If -1, process all samples. Useful for debugging.",
+    ),
     single_node_mode: SingleNodeMode = typer.Option(
         SingleNodeMode.parallel,
         help="Whether to run benchmarks in parallel or sequentially on a single node. "
@@ -205,7 +209,15 @@ def eval(
     (need to be prefixed with ++, since we use Hydra for that script).
     """
     setup_logging(disable_hydra_logs=False, use_rich=True)
+    
+    # Set HF_HOME to workspace cache to avoid cross-cluster symlink issues
+    os.environ['HF_HOME'] = '/workspace/kv_sparsity/.cache/huggingface'
+    os.environ['TRANSFORMERS_CACHE'] = '/workspace/kv_sparsity/.cache/huggingface'
+    
     extra_arguments = f"{' '.join(ctx.args)}"
+    # Add max_samples if specified
+    if max_samples > 0:
+        extra_arguments += f" ++max_samples={max_samples}"
     LOG.info("Starting evaluation job")
     LOG.info("Extra arguments that will be passed to the underlying script: %s", extra_arguments)
 
@@ -443,6 +455,8 @@ def eval(
                 command += f" --wandb_project={wandb_project} "
             if data_dir:
                 command += f" --data_dir={data_dir} "
+            if max_samples > 0:
+                command += f" --max_samples={max_samples} "
 
             if benchmark in benchmark_to_judge_tasks:
                 dependent_tasks = benchmark_to_judge_tasks[benchmark]
